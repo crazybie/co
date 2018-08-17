@@ -29,10 +29,10 @@ PromisePtr<R> promised(F f, Args... args)
 {
 	CoBegin(R)
 	{
-		__state = 1;
+		__state++;
 		f(args..., [=](ErrorCode err, R r) {
 			if (err != ErrorCode::OK) {
-				onErr(co::exceptionPtr(ExceptionWithCode("promised error", (int)err)));
+				onErr(std::make_exception_ptr(ExceptionWithCode("promised error", (int)err)));
 			}
 			else {
 				onOk(r);
@@ -148,20 +148,20 @@ PromisePtr<R> uv_promised(F* f, void(*del)(Req*), Cvt rc, Args... args)
 	Req req;
 	CoBegin(R)
 	{
-		__state = 1;
+		__state++;
 		auto cb = [=](Req* req) { rc(req, onOk, onErr); del(req); };
 		using CB = decltype(cb);
 		req.data = new CB(cb);
 		auto ret = f(uv_default_loop(), &req, args..., [](Req* req) { auto cb = (CB*)req->data; (*cb)(req); delete cb; });
 		if (ret < 0)
-			onErr(co::exceptionPtr(ExceptionWithCode("promised error", ret)));
+			onErr(make_exception_ptr(ExceptionWithCode("promised error", ret)));
 	}
 	CoEnd()
 }
 
 PromisePtr<int> fs_open(const char* fname, int mode) {
 	return uv_promised<int>(uv_fs_open, uv_fs_req_cleanup, [](uv_fs_t* req, Action<int> ok, ErrorCb err) {
-		if (req->result < 0) return err(exceptionPtr(ExceptionWithCode("fs_open error", (int)req->result)));
+		if (req->result < 0) return err(make_exception_ptr(ExceptionWithCode("fs_open error", (int)req->result)));
 		ok((int)req->result);
 	}, fname, mode, 0);
 }
@@ -176,7 +176,7 @@ PromisePtr<const char*> fs_read(uv_file fd, int offset) {
 	static char buffer[255];
 	static auto iov = uv_buf_init(buffer, sizeof(buffer) - 1);
 	return uv_promised<const char*>(uv_fs_read, uv_fs_req_cleanup, [=](uv_fs_t* req, Action<const char*> ok, ErrorCb err) {
-		if (req->result < 0) return err(exceptionPtr(ExceptionWithCode("fs_read error", (int)req->result)));
+		if (req->result < 0) return err(make_exception_ptr(ExceptionWithCode("fs_read error", (int)req->result)));
 		buffer[req->result] = 0;
 		if (req->result == 0) return ok(nullptr);
 		ok(buffer);

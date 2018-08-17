@@ -173,12 +173,5 @@ namespace co
 		}
 		CoEnd()
 	}
-
-	template<typename E>
-	static exception_ptr exceptionPtr(const E& e)
-	{
-		try { throw e; }
-		catch (...) { return current_exception(); }
-	}
 }
 
