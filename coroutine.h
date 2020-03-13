@@ -2,22 +2,24 @@
 #include <functional>
 #include <list>
 #include <memory>
+#include "gcptr/gcptr.h"
 
 namespace co {
 using namespace std;
+using namespace tgc;
 
 template <typename... A>
-using Action = function<void(A...)>;
+using Action = gc_function<void(A...)>;
 
 using ErrorCb = Action<exception_ptr>;
 
 template <typename T>
-using Ptr = shared_ptr<T>;
+using Ptr = gc<T>;
 
 #define CoBegin(...)                  \
   auto __state = 0;                   \
   co::Ptr<co::PromiseBase> __promise; \
-    return std::make_shared<co::Promise<__VA_ARGS__>>([=](const co::Action<__VA_ARGS__>& __onOk, const co::ErrorCb& __onErr) mutable->co::Ptr<co::PromiseBase> { \
+    return gc_new<co::Promise<__VA_ARGS__>>([=](const co::Action<__VA_ARGS__>& __onOk, const co::ErrorCb& __onErr) mutable->co::Ptr<co::PromiseBase> { \
         try { \
             switch ( __state ) { case 0:
 #define CoAwait(expr)          \
@@ -42,29 +44,30 @@ using Ptr = shared_ptr<T>;
       ;                              \
   } while (0)
 
-#define CoAwaitData(var, expr)                                                \
-  do {                                                                        \
-    __state = __LINE__;                                                       \
-    return __promise = expr;                                                  \
-    case __LINE__:                                                            \
-      var = std::static_pointer_cast<decltype(expr)::element_type>(__promise) \
-                ->getValue();                                                 \
+#define CoAwaitData(var, expr)                                                 \
+  do {                                                                         \
+    __state = __LINE__;                                                        \
+    return __promise = expr;                                                   \
+    case __LINE__:                                                             \
+      var =                                                                    \
+          tgc::gc_static_pointer_cast<decltype(expr)::element_type>(__promise) \
+              ->getValue();                                                    \
   } while (0)
 
-#define CoTryAwaitData(var, expr, catchBlock)                                 \
-  do {                                                                        \
-    try {                                                                     \
-      __state = __LINE__;                                                     \
-      return __promise = expr;                                                \
-    } catch catchBlock;                                                       \
-    break;                                                                    \
-    case __LINE__:                                                            \
-      try {                                                                   \
-        var =                                                                 \
-            std::static_pointer_cast<decltype(expr)::element_type>(__promise) \
-                ->getValue();                                                 \
-      } catch catchBlock                                                      \
-      ;                                                                       \
+#define CoTryAwaitData(var, expr, catchBlock)                            \
+  do {                                                                   \
+    try {                                                                \
+      __state = __LINE__;                                                \
+      return __promise = expr;                                           \
+    } catch catchBlock;                                                  \
+    break;                                                               \
+    case __LINE__:                                                       \
+      try {                                                              \
+        var = tgc::gc_static_pointer_cast<decltype(expr)::element_type>( \
+                  __promise)                                             \
+                  ->getValue();                                          \
+      } catch catchBlock                                                 \
+      ;                                                                  \
   } while (0)
 
 #define CoReturn(...)    \
@@ -94,11 +97,11 @@ class Executor {
   Executor() { instance() = this; }
   virtual ~Executor() { instance() = nullptr; }
   virtual bool updateAll();
-  virtual void add(PromiseBase* i) { pool.push_back(i); }
-  virtual void remove(PromiseBase* i) { pool.remove(i); }
+  virtual void add(gc<PromiseBase> i) { pool->push_back(i); }
+  virtual void remove(gc<PromiseBase> i) { pool->remove(i); }
 
  private:
-  list<PromiseBase*> pool;
+  gc_list<PromiseBase> pool = gc_new_list<PromiseBase>();
 };
 
 class PromiseBase {
@@ -122,14 +125,9 @@ class PromiseBase {
   virtual void update() = 0;
 
  protected:
-  PromiseBase() { Executor::instance()->add(this); }
+  PromiseBase() { Executor::instance()->add(gc_from(this)); }
   PromiseBase(const PromiseBase& r) = delete;
   PromiseBase(PromiseBase&& r) = delete;
-  virtual ~PromiseBase() {
-    auto s = Executor::instance();
-    if (s)
-      s->remove(this);
-  }
   void rejected(exception_ptr e) {
     state = State::Failed;
     excep = e;
@@ -185,7 +183,8 @@ class Promise : public PromiseBase {
   Action<T> okCb;
   Action<T> callResolved;
   ErrorCb callError;
-  function<Ptr<PromiseBase>(const Action<T>& onOK, const ErrorCb& onErr)> fsm;
+  gc_function<Ptr<PromiseBase>(const Action<T>& onOK, const ErrorCb& onErr)>
+      fsm;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -195,7 +194,7 @@ using PromisePtr = Ptr<Promise<T>>;
 
 bool Executor::updateAll() {
   auto inprogress = false;
-  for (auto i : instance()->pool) {
+  for (auto& i : *instance()->pool) {
     if (i->state == PromiseBase::State::Inprogress) {
       inprogress = true;
       i->update();
