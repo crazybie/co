@@ -22,6 +22,7 @@ using Ptr = gc<T>;
     return gc_new<co::Promise<__VA_ARGS__>>([=](const co::Action<__VA_ARGS__>& __onOk, const co::ErrorCb& __onErr) mutable->co::Ptr<co::PromiseBase> { \
         try { \
             switch ( __state ) { case 0:
+///
 #define CoAwait(expr)          \
   do {                         \
     __state = __LINE__;        \
@@ -44,30 +45,28 @@ using Ptr = gc<T>;
       ;                              \
   } while (0)
 
-#define CoAwaitData(var, expr)                                                 \
-  do {                                                                         \
-    __state = __LINE__;                                                        \
-    return __promise = expr;                                                   \
-    case __LINE__:                                                             \
-      var =                                                                    \
-          tgc::gc_static_pointer_cast<decltype(expr)::element_type>(__promise) \
-              ->getValue();                                                    \
+#define CoAwaitData(var, expr)                                        \
+  do {                                                                \
+    __state = __LINE__;                                               \
+    return __promise = expr;                                          \
+    case __LINE__:                                                    \
+      using __ty = decltype(expr)::element_type;                      \
+      var = tgc::gc_static_pointer_cast<__ty>(__promise)->getValue(); \
   } while (0)
 
-#define CoTryAwaitData(var, expr, catchBlock)                            \
-  do {                                                                   \
-    try {                                                                \
-      __state = __LINE__;                                                \
-      return __promise = expr;                                           \
-    } catch catchBlock;                                                  \
-    break;                                                               \
-    case __LINE__:                                                       \
-      try {                                                              \
-        var = tgc::gc_static_pointer_cast<decltype(expr)::element_type>( \
-                  __promise)                                             \
-                  ->getValue();                                          \
-      } catch catchBlock                                                 \
-      ;                                                                  \
+#define CoTryAwaitData(var, expr, catchBlock)                           \
+  do {                                                                  \
+    try {                                                               \
+      __state = __LINE__;                                               \
+      return __promise = expr;                                          \
+    } catch catchBlock;                                                 \
+    break;                                                              \
+    case __LINE__:                                                      \
+      try {                                                             \
+        using __ty = decltype(expr)::element_type;                      \
+        var = tgc::gc_static_pointer_cast<__ty>(__promise)->getValue(); \
+      } catch catchBlock                                                \
+      ;                                                                 \
   } while (0)
 
 #define CoReturn(...)    \
@@ -97,8 +96,8 @@ class Executor {
   Executor() { instance() = this; }
   virtual ~Executor() { instance() = nullptr; }
   virtual bool updateAll();
-  virtual void add(gc<PromiseBase> i) { pool->push_back(i); }
-  virtual void remove(gc<PromiseBase> i) { pool->remove(i); }
+  virtual void add(const gc<PromiseBase>& i) { pool->push_back(i); }
+  virtual void remove(const gc<PromiseBase>& i) { pool->remove(i); }
 
  private:
   gc_list<PromiseBase> pool = gc_new_list<PromiseBase>();
@@ -125,7 +124,7 @@ class PromiseBase {
   virtual void update() = 0;
 
  protected:
-  PromiseBase() { Executor::instance()->add(gc_from(this)); }
+  PromiseBase() { Executor::instance()->add(this); }
   PromiseBase(const PromiseBase& r) = delete;
   PromiseBase(PromiseBase&& r) = delete;
   void rejected(exception_ptr e) {
