@@ -145,9 +145,10 @@ template <typename T>
 class Promise : public PromiseBase {
  public:
   template <typename F>
-  Promise(F&& f) : fsm(move(f)) {
-    callResolved = [this](T v) { resolved(v); };
-    callError = [this](exception_ptr err) { rejected(err); };
+  Promise(F&& f)
+      : fsm(move(f)),
+        callResolved{[this](T v) { resolved(v); }},
+        callError{[this](exception_ptr err) { rejected(err); }} {
     update();
   }
   Promise(nullptr_t) {}
