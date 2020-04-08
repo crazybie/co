@@ -124,7 +124,7 @@ class PromiseBase {
   virtual void update() = 0;
 
  protected:
-  PromiseBase() { Executor::instance()->add(this); }
+  PromiseBase() { Executor::instance()->add(gc_from(this)); }
   PromiseBase(const PromiseBase& r) = delete;
   PromiseBase(PromiseBase&& r) = delete;
   void rejected(exception_ptr e) {
@@ -193,7 +193,7 @@ using PromisePtr = Ptr<Promise<T>>;
 
 bool Executor::updateAll() {
   auto inprogress = false;
-  for (auto& i : *instance()->pool) {
+  for (auto& i : *pool) {
     if (i->state == PromiseBase::State::Inprogress) {
       inprogress = true;
       i->update();
