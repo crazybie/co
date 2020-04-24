@@ -195,11 +195,19 @@ using PromisePtr = Ptr<Promise<T>>;
 
 bool Executor::updateAll() {
   auto inprogress = false;
-  for (auto& i : *pool) {
-    if (i->state == PromiseBase::State::Inprogress) {
-      inprogress = true;
-      i->update();
+  for (auto i = pool->begin(); i != pool->end();) {
+    auto& pro = *i;
+    switch (pro->state) {
+      case PromiseBase::State::Inprogress: {
+        inprogress = true;
+        pro->update();
+      } break;
+      case PromiseBase::State::Completed: {
+        i = pool->erase(i);
+        continue;
+      } break;
     }
+    ++i;
   }
   return inprogress;
 }
