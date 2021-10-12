@@ -5,21 +5,24 @@
 #include <memory>
 
 namespace co {
-using namespace std;
+
+using std::exception;
+using std::exception_ptr;
+using std::list;
+using std::move;
+
+// shortcuts
 
 template <typename... A>
 using Action = std::function<void(A...)>;
+
+template <typename T>
+using Func = std::function<T>;
 
 using ErrorCb = Action<exception_ptr>;
 
 template <typename T>
 using Ptr = std::shared_ptr<T>;
-
-template <int N>
-struct Id : Id<N - 1> {};
-
-template <>
-struct Id<0> {};
 
 // FIX msvc:
 // https://stackoverflow.com/questions/57137351/line-is-not-constexpr-in-msvc
@@ -27,6 +30,7 @@ struct Id<0> {};
 #define _CoCat2(X, Y) X##Y
 #define _CO_LINE int(_CoCat(__LINE__, U))
 
+// Args Count
 #define _CoMsvcExpand(...) __VA_ARGS__
 #define _CoDelay(X, ...) _CoMsvcExpand(X(__VA_ARGS__))
 #define _CoEvaluateCount(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, \
@@ -39,6 +43,8 @@ struct Id<0> {};
                                  22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12,  \
                                  11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1))
 
+// API
+
 #define CoAwait(...) \
   _CoMsvcExpand(     \
       _CoDelay(_CoAwaitChoose, _CoArgsCount(__VA_ARGS__))(__VA_ARGS__))
@@ -49,18 +55,26 @@ struct Id<0> {};
       _CoDelay(_CoTryAwaitChoose, _CoArgsCount(__VA_ARGS__))(__VA_ARGS__))
 #define _CoTryAwaitChoose(N) CoTryAwait##N
 
+template <int N>
+struct Id : Id<N - 1> {};
+
+template <>
+struct Id<0> {};
+
 #define CoFunc(...)                       \
   __VA_ARGS__ __co_ret(co::Id<_CO_LINE>); \
   co::PromisePtr<__VA_ARGS__>
 
-#define CoBegin                                         \
-  using __ret = decltype(__co_ret(co::Id<_CO_LINE>{})); \
-  CoBeginImp(__ret)
+#define CoBegin                                           \
+  using __ret_t = decltype(__co_ret(co::Id<_CO_LINE>{})); \
+  CoBeginImp(__ret_t)
 
-#define CoBeginImp(...)               \
-  auto __state = 0;                   \
-  co::Ptr<co::PromiseBase> __promise; \
-    auto ret = std::make_shared<co::Promise<__VA_ARGS__>>([=](const co::Action<__VA_ARGS__>& __onOk, const co::ErrorCb& __onErr) mutable->co::Ptr<co::PromiseBase> { \
+// implementation
+
+#define CoBeginImp(...)         \
+  auto __state = 0;             \
+  co::PromiseBasePtr __promise; \
+    auto __ret = std::make_shared<co::Promise<__VA_ARGS__>>([=](const co::Action<__VA_ARGS__>& __onOk, const co::ErrorCb& __onErr) mutable->co::PromiseBasePtr { \
         try { \
             switch ( __state ) { case 0:
 ///
@@ -116,19 +130,24 @@ struct Id<0> {};
     return nullptr;      \
   } while (0)
 
-#define CoEnd                          \
-  }                                    \
-  ; /* end switch */                   \
-  } /* end try */                      \
-  catch (...) {                        \
-    __onErr(std::current_exception()); \
-  }                                    \
-  return nullptr;                      \
-  });                                  \
-  co::Executor::instance()->add(ret);  \
-  return ret;
+#define CoEnd                           \
+  }                                     \
+  ; /* end switch */                    \
+  } /* end try */                       \
+  catch (...) {                         \
+    __onErr(std::current_exception());  \
+  }                                     \
+  return nullptr;                       \
+  });                                   \
+  co::Executor::instance()->add(__ret); \
+  return __ret;
 
 class PromiseBase;
+
+using PromiseBasePtr = Ptr<PromiseBase>;
+
+////////////////////////////////////////////////////
+// Executor
 
 class Executor {
  public:
@@ -139,12 +158,14 @@ class Executor {
   Executor() { instance() = this; }
   virtual ~Executor() { instance() = nullptr; }
   virtual bool updateAll();
-  virtual void add(Ptr<PromiseBase> i) { pool.push_back(i); }
-  virtual void remove(Ptr<PromiseBase> i) { pool.remove(i); }
+  virtual void add(PromiseBasePtr i) { pool.push_back(i); }
+  virtual void remove(PromiseBasePtr i) { pool.remove(i); }
 
  private:
-  std::list<Ptr<PromiseBase>> pool;
+  std::list<PromiseBasePtr> pool;
 };
+
+////////////////////////////////////////////////////
 
 class PromiseBase : public std::enable_shared_from_this<PromiseBase> {
  public:
@@ -153,7 +174,7 @@ class PromiseBase : public std::enable_shared_from_this<PromiseBase> {
   void onError(Action<exception&> cb) {
     if (state == State::Failed) {
       try {
-        rethrow_exception(excep);
+        std::rethrow_exception(excep);
       } catch (exception& e) {
         cb(e);
       }
@@ -161,14 +182,12 @@ class PromiseBase : public std::enable_shared_from_this<PromiseBase> {
       errorCb = cb;
   }
   void checkError() {
-    if (state == State::Failed) rethrow_exception(excep);
+    if (state == State::Failed) std::rethrow_exception(excep);
   }
   virtual void update() = 0;
 
  protected:
   PromiseBase() {}
-  PromiseBase(const PromiseBase& r) = delete;
-  PromiseBase(PromiseBase&& r) = delete;
   void rejected(exception_ptr e) {
     state = State::Failed;
     excep = e;
@@ -176,10 +195,12 @@ class PromiseBase : public std::enable_shared_from_this<PromiseBase> {
   }
 
  protected:
-  Ptr<PromiseBase> subFsm;
+  PromiseBasePtr subFsm;
   exception_ptr excep;
   Action<exception&> errorCb;
 };
+
+////////////////////////////////////////////////////
 
 template <typename T>
 class Promise : public PromiseBase {
@@ -223,8 +244,7 @@ class Promise : public PromiseBase {
   Action<T> okCb;
   Action<T> callResolved;
   ErrorCb callError;
-  std::function<Ptr<PromiseBase>(const Action<T>& onOK, const ErrorCb& onErr)>
-      fsm;
+  Func<PromiseBasePtr(const Action<T>& onOK, const ErrorCb& onErr)> fsm;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -251,17 +271,16 @@ bool Executor::updateAll() {
   return inprogress;
 }
 
-inline static PromisePtr<bool> all(const list<Ptr<PromiseBase>>& l) {
-  CoBeginImp(bool) {
-    auto allDone = true;
-    for (auto& i : l) {
-      if (i->state == PromiseBase::State::Inprogress) {
-        allDone = false;
-        break;
-      }
+inline PromisePtr<bool> all(const list<PromiseBasePtr>& l) {
+  CoBeginImp(bool);
+  auto done = true;
+  for (auto& i : l) {
+    if (i->state == PromiseBase::State::Inprogress) {
+      done = false;
+      break;
     }
-    if (allDone) CoReturn(true);
   }
-  CoEnd
+  if (done) CoReturn(true);
+  CoEnd;
 }
 }  // namespace co

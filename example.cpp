@@ -11,7 +11,6 @@
 
 using namespace co;
 
-using co::PromisePtr;
 using std::map;
 using std::string;
 
@@ -101,18 +100,19 @@ class Handler {
   }
 
   CoFunc(bool) callInSequence() {
-    puts("call in sequence");
+    puts("call in sequence");    
     string v;
+
     CoBegin;
+
     CoTryAwait(
-        v, promised<string>(GetUrl, string("ttp://test2")),
-        (ExceptionWithCode & e) {
+        v, promised<string>(GetUrl, "ttp://test2"), (ExceptionWithCode & e) {
           v = "";
           printf("exception: %s, code: %d\n", e.what(), e.code);
         });
     if (v.length()) printf("getUrl:%s\n", v.c_str());
 
-    CoAwait(v, promised<string>(GetUrl, string("http://test1")));
+    CoAwait(v, promised<string>(GetUrl, "http://test1"));
     printf("getUrl:%s\n", v.c_str());
 
     CoReturn(true);
@@ -124,7 +124,7 @@ class Handler {
 void testLogin() {
   Handler h;
 
-  static auto prom = h.login(3);
+  auto prom = h.login(3);
   prom->onDone([](map<string, int> d) {
     printf("login done: uid=%d, sid=%d\n", d["uid"], d["sid"]);
   });
@@ -229,12 +229,9 @@ int main() {
   for (auto i = 0; i < 500; i++) testLibuv();
 
   int cnt = 0;
-  for (auto run = true; run;) {
-    run = sc.updateAll();
-
+  for (auto run = true; run = sc.updateAll();) {
     printf("\r%c", "-\\|-/"[cnt++ % 5]);
-    std::this_thread::sleep_for(chrono::milliseconds(30));
-
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
     uv_run(uv_default_loop(), UV_RUN_ONCE);
   }
 }
