@@ -6,11 +6,11 @@ based on Duff's device(https://en.wikipedia.org/wiki/Duff%27s_device)
 - super lightweight with only one header file.
 - support async & await with simple syntax.
 - support await all in parallel.
-- can very easily convert callback style api to awaitables.
+- can very easily convert callback style API to awaitables.
 - auto propagate exceptions to caller.
 - can customize the scheduler.
 - only need c++14.
-- no other dependencies except stl.
+- no other dependencies except STL.
 
 
 ## Limitations
@@ -36,9 +36,9 @@ CoFunc(string) fs_read_all(const char* fname)
 	int fd;
 	CoBegin;
 	
-	CoAwaitData(fd, fs_open(fname, O_RDONLY));
+	CoAwait(fd, fs_open(fname, O_RDONLY));
 	for (;;) {
-		CoAwaitData(cur, fs_read(fd, content.length()));
+		CoAwait(cur, fs_read(fd, content.length()));
 		if (cur == nullptr)
 			break;
 		content += cur;
@@ -46,7 +46,7 @@ CoFunc(string) fs_read_all(const char* fname)
 	CoAwait(fs_close(fd));
 	CoReturn(content);
 	
-	CoEnd()
+	CoEnd;
 };
 
 
