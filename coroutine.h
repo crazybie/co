@@ -2,8 +2,8 @@
 #include <exception>
 #include <functional>
 #include <list>
-#include <vector>
 #include <memory>
+#include <vector>
 
 namespace co {
 
@@ -188,67 +188,67 @@ bool Executor::updateAll() {
       _CoDelay(_CoTryAwaitChoose, _CoArgsCount(__VA_ARGS__))(__VA_ARGS__))
 #define _CoTryAwaitChoose(N) CoTryAwait##N
 
-#define CoFunc(...)                       \
+#define CoFunc(...)                                        \
   __VA_ARGS__ __co_ret_type(co::Id<_CoMsvcConstexprLine>); \
   co::PromisePtr<__VA_ARGS__>
 
-#define CoBegin                                           \
+#define CoBegin                                                            \
   using __ret_t = decltype(__co_ret_type(co::Id<_CoMsvcConstexprLine>{})); \
   CoBeginImp(__ret_t)
 
 // implementation
 
-#define CoBeginImp(...)         \
+#define CoBeginImp(...)            \
   auto __co_state = 0;             \
   co::PromiseBasePtr __co_promise; \
     auto __ret = std::make_shared<co::Promise<__VA_ARGS__>>([=](const co::Action<__VA_ARGS__>& __onOk, const co::ErrorCb& __onErr) mutable->co::PromiseBasePtr { \
         try { \
             switch ( __co_state ) { case 0:
 ///
-#define CoAwait1(expr)         \
-  do {                         \
+#define CoAwait1(expr)            \
+  do {                            \
     __co_state = __LINE__;        \
     return __co_promise = expr;   \
-    case __LINE__:             \
+    case __LINE__:                \
       __co_promise->checkError(); \
   } while (0)
 
 #define CoTryAwait2(expr, catchBlock) \
   do {                                \
     try {                             \
-      __co_state = __LINE__;             \
-      return __co_promise = expr;        \
+      __co_state = __LINE__;          \
+      return __co_promise = expr;     \
     } catch catchBlock;               \
     break;                            \
     case __LINE__:                    \
       try {                           \
-        __co_promise->checkError();      \
+        __co_promise->checkError();   \
       } catch catchBlock              \
       ;                               \
   } while (0)
 
-#define CoAwait2(var, expr)                                        \
-  do {                                                             \
+#define CoAwait2(var, expr)                                           \
+  do {                                                                \
     __co_state = __LINE__;                                            \
     return __co_promise = expr;                                       \
-    case __LINE__:                                                 \
-      using __ty = decltype(expr)::element_type;                   \
+    case __LINE__:                                                    \
+      using __ty = decltype(expr)::element_type;                      \
       var = std::static_pointer_cast<__ty>(__co_promise)->getValue(); \
   } while (0)
 
-#define CoTryAwait3(var, expr, catchBlock)                           \
-  do {                                                               \
-    try {                                                            \
+#define CoTryAwait3(var, expr, catchBlock)                              \
+  do {                                                                  \
+    try {                                                               \
       __co_state = __LINE__;                                            \
       return __co_promise = expr;                                       \
-    } catch catchBlock;                                              \
-    break;                                                           \
-    case __LINE__:                                                   \
-      try {                                                          \
-        using __ty = decltype(expr)::element_type;                   \
+    } catch catchBlock;                                                 \
+    break;                                                              \
+    case __LINE__:                                                      \
+      try {                                                             \
+        using __ty = decltype(expr)::element_type;                      \
         var = std::static_pointer_cast<__ty>(__co_promise)->getValue(); \
-      } catch catchBlock                                             \
-      ;                                                              \
+      } catch catchBlock                                                \
+      ;                                                                 \
   } while (0)
 
 #define CoReturn(...)    \
