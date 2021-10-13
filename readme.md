@@ -8,8 +8,8 @@ based on Duff's device(https://en.wikipedia.org/wiki/Duff%27s_device)
 - support await all in parallel.
 - can very easily convert callback style api to awaitables.
 - auto propagate exceptions to caller.
-- can custmize the scheduler.
-- only need c++11.
+- can customize the scheduler.
+- only need c++14.
 - no other dependencies except stl.
 
 
@@ -29,24 +29,24 @@ based on Duff's device(https://en.wikipedia.org/wiki/Duff%27s_device)
 Simple usage example:
 ```c++
 
-PromisePtr<string> fs_read_all(const char* fname)
+CoFunc(string) fs_read_all(const char* fname)
 {
 	string content;
 	const char* cur;
 	int fd;
-	CoBegin(string)
-	{
-		CoAwaitData(fd, fs_open(fname, O_RDONLY));
-		for (;;) {
-			CoAwaitData(cur, fs_read(fd, content.length()));
-			if (cur == nullptr)
-				break;
-			content += cur;
-		}
-		CoAwait(fs_close(fd));
-		CoReturn(content);
+	CoBegin;
+	
+	CoAwaitData(fd, fs_open(fname, O_RDONLY));
+	for (;;) {
+		CoAwaitData(cur, fs_read(fd, content.length()));
+		if (cur == nullptr)
+			break;
+		content += cur;
 	}
-	CoEnd();
+	CoAwait(fs_close(fd));
+	CoReturn(content);
+	
+	CoEnd()
 };
 
 
