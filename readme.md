@@ -1,4 +1,4 @@
-# Tiny Stackless Coroutine in C++11
+# Tiny Stackless Coroutine in C++14
 
 based on Duff's device(https://en.wikipedia.org/wiki/Duff%27s_device)
 
